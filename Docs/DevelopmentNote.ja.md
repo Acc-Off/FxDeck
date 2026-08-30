@@ -64,6 +64,7 @@ CSS を推測で直さず、描画して確認する。
 - `@mdi/font` は eot/woff/ttf も参照するので `vite.config.ts` のプラグイン（`enforce: "pre"`）で woff2 だけに絞っている。Font Awesome 7 のメタデータは `metadata/icon-families.json`（5MB）で、ビルド時に軽量インデックスへ変換する（`scripts/gen-icon-index.mjs` → `src/generated/`、git 管理外）。
 - 画像はブラウザ側（canvas）で 256×256 PNG にしてからアップロードし、サーバーは既に 256×256 PNG ならそのまま保存する。GDI+ の再エンコードは非決定的で、描き直すとエクスポート→インポートでハッシュが変わるため。
 - Git Bash 経由の `perl -e` / `node -e` / ヒアドキュメントでは `\\` が `\` に潰れる。バックスラッシュを含むスクリプトはファイルに書いてから実行する。
+- `language: auto` の文言は OS の UI カルチャで決まるので、日本語メッセージをアサートするテストは英語の CI ランナー（GitHub Actions の windows-latest）で落ちる。`tests/FxDeck.Tests/TestCulture.cs` の `[ModuleInitializer]` でテストプロセスを ja-JP に固定している。他のカルチャを試すテストは自分で `CultureInfo.CurrentUICulture` を切り替える。
 
 ## 6. 既知の課題・今後の候補
 
