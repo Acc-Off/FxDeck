@@ -1,0 +1,15 @@
+<Project>
+
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <Authors>Acc-Off</Authors>
+    <Product>FxDeck</Product>
+    <Copyright>Copyright (c) 2026 Acc-Off</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <NeutralLanguage>ja-JP</NeutralLanguage>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+</Project>

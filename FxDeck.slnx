@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FxDeck.Emulator/FxDeck.Emulator.csproj" />
+    <Project Path="src/FxDeck/FxDeck.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FxDeck.Tests/FxDeck.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>FxDeck</AssemblyName>
+    <RootNamespace>FxDeck</RootNamespace>
+    <Version>0.6.0</Version>
+    <ApplicationIcon />
+    <!-- Frontend (Vite) lives next door; its dist/ is embedded into the exe (see targets below). -->
+    <WebRoot>$(MSBuildThisFileDirectory)..\FxDeck.Web\</WebRoot>
+    <WebDist>$(WebRoot)dist\</WebDist>
+    <!-- $(IntermediateOutputPath) is not defined yet at this point; BaseIntermediateOutputPath (obj\) is. -->
+    <WebStamp>$(BaseIntermediateOutputPath)web.stamp</WebStamp>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="CloudflaredKit" Version="0.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="THIRD-PARTY-NOTICES.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <_WebInputs Include="$(WebRoot)src\**\*;$(WebRoot)public\**\*;$(WebRoot)scripts\**\*;$(WebRoot)index.html;$(WebRoot)package.json;$(WebRoot)package-lock.json;$(WebRoot)vite.config.ts;$(WebRoot)tsconfig.json" Exclude="$(WebRoot)src\generated\**" />
+  </ItemGroup>
+
+  <!-- npm ci && npm run build, only when a frontend source changed. Set SkipWebBuild=true to build without Node. -->
+  <Target Name="BuildWeb" BeforeTargets="BeforeBuild" Inputs="@(_WebInputs)" Outputs="$(WebStamp)" Condition="'$(SkipWebBuild)' != 'true'">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(WebRoot)" Condition="!Exists('$(WebRoot)node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(WebRoot)" />
+    <Touch Files="$(WebStamp)" AlwaysCreate="true" />
+  </Target>
+
+  <!-- Embed dist/** as wwwroot/<relative path>. Added inside a target so files produced by BuildWeb are picked up. -->
+  <Target Name="EmbedWeb" BeforeTargets="BeforeBuild" DependsOnTargets="BuildWeb" AfterTargets="BuildWeb">
+    <ItemGroup>
+      <_WebDistFiles Include="$(WebDist)**\*" />
+      <EmbeddedResource Include="@(_WebDistFiles)" LogicalName="wwwroot/%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
+    <Warning Text="Frontend dist not found at $(WebDist); the web UI will not be served." Condition="'@(_WebDistFiles)' == ''" />
+  </Target>
+
+</Project>

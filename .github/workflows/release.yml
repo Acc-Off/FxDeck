@@ -1,0 +1,63 @@
+name: Release
+
+# Pushing a tag such as v0.6.0 builds both single-file variants, runs the tests
+# and publishes a GitHub release with the executables attached.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/FxDeck.Web/package-lock.json
+
+      - name: Check that the tag matches the project version
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart("v")
+          $version = (Select-Xml -Path src/FxDeck/FxDeck.csproj -XPath "//Version").Node.InnerText
+          if ($tag -ne $version) { throw "Tag v$tag does not match <Version>$version</Version> in src/FxDeck/FxDeck.csproj" }
+          Add-Content -Path $env:GITHUB_ENV -Value "VERSION=$version"
+
+      - name: Build and test
+        run: |
+          dotnet build FxDeck.slnx -c Release
+          dotnet test FxDeck.slnx -c Release --no-build
+
+      - name: Publish (self-contained)
+        run: dotnet publish src/FxDeck -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o out/self-contained
+
+      - name: Publish (slim, framework-dependent)
+        run: dotnet publish src/FxDeck -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o out/slim
+
+      - name: Collect release assets
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item out/self-contained/FxDeck.exe "dist/FxDeck-$env:VERSION-win-x64.exe"
+          Copy-Item out/slim/FxDeck.exe "dist/FxDeck-$env:VERSION-win-x64-slim.exe"
+          Get-ChildItem dist/*.exe |
+            ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } |
+            Set-Content -Path dist/SHA256SUMS.txt -Encoding ascii
+          Get-ChildItem dist | Format-Table Name, Length
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" (Get-ChildItem dist/*).FullName `
+            --title "FxDeck $env:VERSION" `
+            --notes-file .github/release-notes.md

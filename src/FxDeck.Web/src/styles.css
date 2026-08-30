@@ -1,0 +1,557 @@
+/* Deck look: black, rounded square keys, title overlay (UIUX §0, §4). Light theme per §4.10. */
+:root {
+  --bg: #000;
+  --empty: #161616;
+  --fg: #fff;
+  --muted: #9a9a9a;
+  --bar-bg: #000;
+  --bar-fg: #d0d0d0;
+  --overlay: rgba(0, 0, 0, 0.88);
+}
+
+:root[data-theme="light"] {
+  --bg: #e6e6e6;
+  --empty: #d3d3d3;
+  --fg: #111;
+  --muted: #555;
+  --bar-bg: #e6e6e6;
+  --bar-fg: #111;
+  --overlay: rgba(230, 230, 230, 0.94);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+body {
+  overflow: hidden;
+  touch-action: none;
+}
+
+.deck {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* status bar (§4.6) */
+.statusbar {
+  position: relative;
+  flex: none;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 22px;
+  white-space: nowrap;
+  background: var(--bar-bg);
+  color: var(--bar-fg);
+}
+
+.statusbar .status-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7a7a7a;
+}
+
+.statusbar.connected .status-dot {
+  background: #3ddc84;
+}
+
+.statusbar.connecting .status-dot {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.statusbar.disconnected .status-dot {
+  background: #f2c94c;
+}
+
+.statusbar.disconnected .status-text {
+  color: #f2c94c;
+}
+
+.statusbar .status-profile {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: 600;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusbar .status-console {
+  margin-left: auto;
+  flex: none;
+  height: 22px;
+  padding: 0 6px;
+  background: none;
+  border: 0;
+  color: var(--bar-fg);
+  font: 700 11px/22px Consolas, "Cascadia Mono", Menlo, monospace;
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+.statusbar .status-console.active {
+  color: #3ddc84;
+  opacity: 1;
+}
+
+/* grid (§4.1) */
+.grid-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grid {
+  display: grid;
+}
+
+.key {
+  position: relative;
+  width: var(--key);
+  height: var(--key);
+  border-radius: 18%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 80ms ease-out,
+    filter 80ms ease-out,
+    opacity 200ms ease-out;
+  cursor: pointer;
+}
+
+.key.empty {
+  background: var(--empty);
+  cursor: default;
+}
+
+.key.pressed {
+  transform: scale(0.94);
+  filter: brightness(1.3);
+}
+
+.key.flash {
+  animation: flash 350ms ease-out;
+}
+
+.game-off .key:not(.empty) {
+  opacity: 0.55;
+}
+
+.key .icon {
+  font-size: calc(var(--key) * 0.42);
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+.key .icon.emoji {
+  font-size: calc(var(--key) * 0.4);
+  text-shadow: none;
+}
+
+/* Make room for the title overlay: nudge the icon away from it, like Stream Deck's key images do. */
+.key.title-bottom .icon {
+  transform: translateY(calc(var(--key) * -0.09));
+}
+
+.key.title-top .icon {
+  transform: translateY(calc(var(--key) * 0.09));
+}
+
+.key .icon.image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.key .title {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  text-align: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: calc(var(--key) * 0.14);
+  line-height: 1.15;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 2px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+.key .title.top {
+  top: 7%;
+}
+
+.key .title.middle {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.key .title.bottom {
+  bottom: 7%;
+}
+
+.key .title.solo {
+  font-size: calc(var(--key) * 0.19);
+}
+
+.key .hold-mark {
+  position: absolute;
+  top: 8%;
+  right: 8%;
+  width: 9%;
+  height: 9%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+}
+
+.key .stage-dots {
+  position: absolute;
+  top: 8%;
+  left: 8%;
+  display: flex;
+  gap: 4%;
+  pointer-events: none;
+}
+
+.key .stage-dots span {
+  width: calc(var(--key) * 0.07);
+  height: calc(var(--key) * 0.07);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.6);
+}
+
+.key .stage-dots span.on {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.key .hold-ring {
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(rgba(255, 255, 255, 0.5) var(--p), transparent 0);
+  pointer-events: none;
+}
+
+.key .progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+  background-size: 200% 100%;
+  animation: slide 1s linear infinite;
+}
+
+/* page dots (§4.5) */
+.dots {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  padding: 8px 0 10px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(128, 128, 128, 0.5);
+  position: relative;
+}
+
+.dot::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+
+.dot.active {
+  background: var(--fg);
+}
+
+/* overlays, toast, empty states (§4.7, §7) */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay);
+  color: var(--fg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  z-index: 10;
+}
+
+.overlay h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+.overlay p {
+  margin: 4px 0;
+}
+
+.overlay .hint {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 16px;
+}
+
+.toast {
+  position: fixed;
+  bottom: 14%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #b3261e;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  white-space: nowrap;
+  z-index: 20;
+  animation: fadein 150ms ease-out;
+}
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state h2 {
+  color: var(--fg);
+  margin: 0 0 8px;
+}
+
+/* install banner (§4.9) */
+.banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  background: #1f1f1f;
+  color: #fff;
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  z-index: 30;
+  font-size: 13px;
+}
+
+.banner-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.banner-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.banner button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #3a3a3a;
+  color: #fff;
+  font-size: 13px;
+}
+
+.banner button.primary {
+  background: #2f6fdb;
+}
+
+/* admin placeholder */
+.admin-placeholder {
+  max-width: 640px;
+  margin: 40px auto;
+  padding: 0 20px;
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.admin-placeholder a {
+  color: #4f8ff7;
+}
+
+@keyframes flash {
+  0% {
+    box-shadow: inset 0 0 0 100vmax rgba(220, 40, 40, 0.85);
+  }
+
+  100% {
+    box-shadow: inset 0 0 0 100vmax rgba(220, 40, 40, 0);
+  }
+}
+
+@keyframes slide {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes fadein {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+
+/* console drawer (§4.8) */
+.console {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42%;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.92);
+  color: #d8d8d8;
+  border-top: 1px solid #333;
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 35; /* above the install banner (30); the toast moves up while the drawer is open */
+}
+
+:root[data-theme="light"] .console {
+  background: rgba(255, 255, 255, 0.96);
+  color: #222;
+  border-top-color: #bbb;
+}
+
+.console-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.console-bar .console-title {
+  font-weight: 600;
+}
+
+.console-bar button {
+  background: none;
+  border: 1px solid currentColor;
+  color: inherit;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.console-bar .close {
+  margin-left: auto;
+  border: 0;
+  font-size: 15px;
+  padding: 0 6px;
+}
+
+.console-lines {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 10px 6px;
+  font: 12px/1.45 Consolas, "Cascadia Mono", Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.console-empty {
+  color: var(--muted);
+  padding: 12px 0;
+}
+
+.console-handle {
+  position: fixed;
+  right: 8px;
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  width: 36px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: rgba(0, 0, 0, 0.5);
+  color: #bbb;
+  font: 700 11px/22px Consolas, "Cascadia Mono", Menlo, monospace;
+  z-index: 4;
+  cursor: pointer;
+}
+
+:root[data-theme="light"] .console-handle {
+  background: rgba(255, 255, 255, 0.7);
+  color: #333;
+  border-color: #aaa;
+}
+
+.deck.console-open .toast {
+  bottom: calc(42% + 12px);
+}
