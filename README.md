@@ -18,6 +18,7 @@ FxDeck is a single Windows executable that sits in the system tray, connects to 
 - **Press / release and stages** — a key can send one command when pressed and another when released (hold to `e sit`, let go to `e c`), or cycle through up to five stages with their own icon and command (a sit / stand toggle).
 - **Live console** — the game's console output streams to a drawer on the phone.
 - **Edit on the PC, see it on the phone** — the admin UI runs in your desktop browser; every change is saved automatically and pushed to connected phones immediately. "Test send" sends a command while you edit.
+- **Command suggestions from your server** — while in‑game, one click reads the permission‑filtered command list your server's chat already knows; the button editor then completes command names as you type and offers a searchable command picker.
 - **Connect with a QR code** — no pairing, no app. The QR code carries an access token; the deck is token‑protected, the admin UI is reachable from `localhost` only.
 - **Works when Wi‑Fi doesn't** — optional Cloudflare Tunnel (TryCloudflare with no account, or a fixed URL with your own Zero Trust tunnel) for phones on a different network.
 - **Import / export** — profiles or the whole configuration as `.fxdeck` files, images included.
@@ -77,6 +78,12 @@ Commands are sent to the game one frame at a time with a small gap, so a long ch
 - The admin UI listens on `127.0.0.1` only and has no authentication; it is meant for the person sitting at the PC.
 - Traffic on the LAN is plain HTTP (self‑signed HTTPS is unusable on phones). It is intended for a home network. Cloudflare Tunnel traffic is HTTPS.
 
+### Command suggestions from the server
+
+- While you are on a server, click **Settings → Input assist → Extract commands from the connected server**. FxDeck reads the suggestion list the chat UI already holds — the same permission‑filtered (ACE) list you see when typing `/` in chat — and caches it in `commands-cache.json`.
+- The button editor then suggests command names as you type, with help texts and argument hints (`jail <id> [time]`); it also works in the middle of macro chains. The **Command list** button next to the command fields opens a searchable picker. Keybind halves (`+x` / `-x`) and internal commands are hidden there by default behind a toggle.
+- **How it reads them**: the FiveM client exposes a loopback‑only NUI debugging port (`127.0.0.1:13172`). FxDeck connects to it **only when you click the button**, passively reads the chat resource's in‑memory state, and sends nothing to the game or the server — there is no background polling. It is an undocumented surface, so a game update may break it, and servers that replace the standard chat resource cannot be read; the suggestions are a convenience, and typing commands manually always works. Extraction only works in‑game (not on the main menu).
+
 ### Where things are stored
 
 `%LOCALAPPDATA%\FxDeck` (tray menu → **Open data folder**):
@@ -85,6 +92,7 @@ Commands are sent to the game one frame at a time with a small gap, so a long ch
 |---|---|
 | `config.json` | Settings and profiles. Editing it by hand is fine; changes are picked up live |
 | `deck-token` | The access token |
+| `commands-cache.json` | Command list extracted for the input assist (safe to delete; re‑extract any time) |
 | `assets\` | Uploaded key images (`<sha256>.png`) |
 | `logs\fxdeck.log` | Log (1 MB rotation) |
 | `cloudflared\` | `cloudflared.exe`, downloaded when a tunnel is first started |
@@ -135,7 +143,7 @@ Design documents live in [Docs/](Docs/) (Japanese only for now): [DesignNote.ja.
 
 ## How it works
 
-FiveM and RedM clients expose a console socket on `127.0.0.1:29200`. FxDeck keeps a connection to it, sends commands as `CMND` frames and relays `PRNT` frames (console output) to the phone. The protocol is **undocumented** and was studied from [fxcommands](https://github.com/josh-tf/fxcommands); it may change with a game update. The web side is a Kestrel server with two listeners — the admin API on loopback only and the deck on all interfaces behind a token — and a single React SPA.
+FiveM and RedM clients expose a console socket on `127.0.0.1:29200`. FxDeck keeps a connection to it, sends commands as `CMND` frames and relays `PRNT` frames (console output) to the phone. The protocol is **undocumented** and was studied from [fxcommands](https://github.com/josh-tf/fxcommands); it may change with a game update. The web side is a Kestrel server with two listeners — the admin API on loopback only and the deck on all interfaces behind a token — and a single React SPA. The command suggestions use a second undocumented surface: an on‑demand, passive read of the chat NUI's state through the client's CEF debugging port (`127.0.0.1:13172`).
 
 ## Disclaimer
 

@@ -6,6 +6,7 @@ using FxDeck.Config;
 using FxDeck.FxConsole;
 using FxDeck.Localization;
 using FxDeck.Logging;
+using FxDeck.NuiInspect;
 using FxDeck.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -115,6 +116,15 @@ public static class FxDeckHost
             return store;
         });
         builder.Services.AddSingleton(new AssetStore(options.DataDirectory));
+        builder.Services.AddSingleton(sp =>
+        {
+            var store = new CommandCacheStore(options.DataDirectory, sp.GetRequiredService<ILogger<CommandCacheStore>>());
+            store.Load();
+            return store;
+        });
+        // NUI command extraction (design memo §3.10). Tests swap NuiInspectOptions to point at a fake CDP server.
+        builder.Services.AddSingleton<NuiInspectOptions>();
+        builder.Services.AddSingleton(sp => new ChatCommandExtractor(sp.GetRequiredService<NuiInspectOptions>(), sp.GetRequiredService<ILogger<ChatCommandExtractor>>()));
         builder.Services.AddSingleton<Localizer>();
         builder.Services.AddSingleton<DeckAuth>();
         builder.Services.AddSingleton<IFxConsoleClient>(sp =>

@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MAX_STAGES, stageCount, stageOf, type DeckKey, type DeckProfile, type KeyIcon, type KeyStage } from "../shared/types";
 import { Icon } from "../deck/Icon";
 import { t as translate, useT } from "../shared/i18n";
 import { api } from "./api";
+import { CommandInput, type CommandInputHandle } from "./CommandInput";
+import { CommandPicker } from "./CommandPicker";
 import { IconPicker } from "./IconPicker";
 import { describeIcon } from "./iconSearch";
 import { newKey, useAdminStore } from "./store";
@@ -22,12 +24,16 @@ interface Props {
 export function KeyEditor({ profile, cell }: Props) {
   const t = useT();
   const update = useAdminStore((s) => s.update);
+  const commandsExtracted = useAdminStore((s) => Boolean(s.commandCache?.extractedAt));
   const existing = profile.keys.find((k) => k.row === cell.row && k.col === cell.col) ?? null;
   const key: DeckKey = existing ?? newKey(cell.row, cell.col);
   const [stage, setStage] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [commandPickerFor, setCommandPickerFor] = useState<"command" | "release" | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
+  const commandInput = useRef<CommandInputHandle>(null);
+  const releaseInput = useRef<CommandInputHandle>(null);
 
   useEffect(() => {
     setTestResult(null);
@@ -184,9 +190,14 @@ export function KeyEditor({ profile, cell }: Props) {
         </div>
       </div>
 
-      <label>
-        {t("key.command")}
-        <textarea rows={3} value={command} placeholder={t("key.commandPlaceholder")} onChange={(e) => editStage((s) => s.setCommand(e.target.value))} spellCheck={false} />
+      <div className="field command-field">
+        <div className="field-head">
+          <span>{t("key.command")}</span>
+          <button type="button" className="ghost" onClick={() => setCommandPickerFor("command")}>
+            {t("key.commandList")}
+          </button>
+        </div>
+        <CommandInput ref={commandInput} rows={3} value={command} placeholder={t("key.commandPlaceholder")} onChange={(v) => editStage((s) => s.setCommand(v))} />
         <span className="hint">
           <code>;</code>
           {t("key.hint.chain")}
@@ -195,13 +206,19 @@ export function KeyEditor({ profile, cell }: Props) {
           <code>;;</code>
           {t("key.hint.shortWait")}
         </span>
-      </label>
+        {!commandsExtracted && <span className="hint">{t("key.assistHint")}</span>}
+      </div>
 
-      <label>
-        {t("key.release")}
-        <textarea rows={2} value={releaseCommand} placeholder={t("key.releasePlaceholder")} onChange={(e) => editStage((s) => s.setReleaseCommand(e.target.value))} spellCheck={false} />
+      <div className="field command-field">
+        <div className="field-head">
+          <span>{t("key.release")}</span>
+          <button type="button" className="ghost" onClick={() => setCommandPickerFor("release")}>
+            {t("key.commandList")}
+          </button>
+        </div>
+        <CommandInput ref={releaseInput} rows={2} value={releaseCommand} placeholder={t("key.releasePlaceholder")} onChange={(v) => editStage((s) => s.setReleaseCommand(v))} />
         {releaseCommand.trim() && <span className="hint">{t("key.hint.release")}</span>}
-      </label>
+      </div>
 
       <label className="checkbox">
         <input type="checkbox" checked={key.holdToConfirm} onChange={(e) => edit((k) => (k.holdToConfirm = e.target.checked))} />
@@ -225,6 +242,15 @@ export function KeyEditor({ profile, cell }: Props) {
       {testResult && <p className="hint">{testResult}</p>}
 
       {pickerOpen && <IconPicker current={view.icon} onPick={(icon: KeyIcon | null) => editStage((s) => s.setIcon(icon))} onClose={() => setPickerOpen(false)} />}
+      {commandPickerFor && (
+        <CommandPicker
+          onPick={(name) => {
+            (commandPickerFor === "command" ? commandInput : releaseInput).current?.insert(name + " ");
+            setCommandPickerFor(null);
+          }}
+          onClose={() => setCommandPickerFor(null)}
+        />
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ using FxDeck.Commands;
 using FxDeck.Config;
 using FxDeck.FxConsole;
 using FxDeck.Localization;
+using FxDeck.NuiInspect;
 using FxDeck.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -306,6 +307,44 @@ public static class AdminEndpoints
         admin.MapPost("/restart", (AppLifecycle lifecycle) =>
         {
             lifecycle.RequestRestart();
+            return Results.Json(new { ok = true }, FxJson.Wire);
+        });
+
+        // NUI command extraction (design memo §3.10): explicit user action only — never polled.
+        admin.MapPost("/commands/extract", async (ChatCommandExtractor extractor, CommandCacheStore commands, Localizer l, ILoggerFactory loggers, CancellationToken ct) =>
+        {
+            var result = await extractor.ExtractAsync(ct);
+            if (!result.Success)
+            {
+                var code = result.Failure switch
+                {
+                    ExtractionFailure.GameNotRunning => "gameNotRunning",
+                    ExtractionFailure.NotInSession => "notInSession",
+                    _ => "chatUnavailable",
+                };
+                return Results.Json(new { error = l.T("api.commands." + code), code }, FxJson.Wire, statusCode: StatusCodes.Status409Conflict);
+            }
+
+            var cache = new CommandCache
+            {
+                ExtractedAt = DateTimeOffset.Now,
+                Server = null, // no cheap source for a server label yet (design memo §3.10)
+                Count = result.Commands.Count,
+                Commands = [.. result.Commands],
+            };
+            commands.Save(cache);
+            loggers.CreateLogger("FxDeck.Commands").LogInformation("Cached {Count} extracted commands", cache.Count);
+            return Results.Json(cache, FxJson.Wire);
+        });
+
+        admin.MapGet("/commands", (CommandCacheStore commands) =>
+            commands.Current is { } cache
+                ? Results.Json(cache, FxJson.Wire)
+                : Results.Json(new { commands = Array.Empty<object>() }, FxJson.Wire));
+
+        admin.MapDelete("/commands", (CommandCacheStore commands) =>
+        {
+            commands.Delete();
             return Results.Json(new { ok = true }, FxJson.Wire);
         });
 

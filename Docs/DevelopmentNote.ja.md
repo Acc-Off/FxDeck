@@ -8,7 +8,7 @@
 - 全体: `dotnet build FxDeck.slnx` → `dotnet test FxDeck.slnx --no-build`。`src/FxDeck` のビルドが `npm ci && npm run build` を呼び、`src/FxDeck.Web/dist/` を EmbeddedResource として exe に埋め込む（フロントのソースが変わったときだけ）。
 - C# だけ確認するなら `dotnet build FxDeck.slnx -p:SkipWebBuild=true`（Node 不要）。
 - 本体を起動中だと exe の差し替えに失敗する。トレイの「終了」で止めてからビルドする。
-- テストは xUnit（`tests/FxDeck.Tests`）。パーサ・プロトコル・エミュレータ相手の結合・Web API・設定・インポート／エクスポート・ファイアウォール判定・トンネル（cloudflared はフェイク `tests/Fakes/FakeCloudflared.cs`。`FxDeckHostOptions.ConfigureServices` で `ICloudflaredService` / `ICloudflaredDownloader` を差し替える）。
+- テストは xUnit（`tests/FxDeck.Tests`）。パーサ・プロトコル・エミュレータ相手の結合・Web API・設定・インポート／エクスポート・ファイアウォール判定・トンネル（cloudflared はフェイク `tests/Fakes/FakeCloudflared.cs`。`FxDeckHostOptions.ConfigureServices` で `ICloudflaredService` / `ICloudflaredDownloader` を差し替える）・NUI コマンド抽出（13172 にはエミュレータが無いのでフェイク `tests/Fakes/FakeCdpServer.cs` を相手にする。`ConfigureServices` で `NuiInspectOptions` を差し替えて接続先を向ける）。
 
 ## 2. 動作確認
 
@@ -17,7 +17,7 @@
 - API の E2E: `FxDeck.exe --data-dir <temp> --admin-port 20299 --deck-port 20200` → `curl http://127.0.0.1:20299/api/admin/status`。デッキのトークンは `<temp>/deck-token`（BOM なし）。デッキは `http://127.0.0.1:20200/?t=<token>` で Cookie 交換から入れる。
 - 単発送信: `FxDeck.exe --send "e wave"`（Web サーバーを立てずに 1 回送って終了）。
 - フロント開発: `cd src/FxDeck.Web && npm run dev`（`/api` は 20200 へ proxy）。または `npm run watch` + 環境変数 `FXDECK_WEBROOT=src/FxDeck.Web/dist` で本体からディスク上の dist を配信。
-- 実際の FiveM で確認済みの前提: コマンド送信、コンソール出力の表示、ゲーム再起動後の再接続、`PRNT` のテキストオフセット 40、25ms の送信間隔。プロトコルを触ったら実機でもこの範囲を再確認する。
+- 実際の FiveM で確認済みの前提: コマンド送信、コンソール出力の表示、ゲーム再起動後の再接続、`PRNT` のテキストオフセット 40、25ms の送信間隔、NUI コマンド抽出（in-game の実クライアント相手に設定画面のボタンから 520 件取得。2026-08-31）。プロトコルや `NuiInspect` を触ったら実機でもこの範囲を再確認する。抽出はメニュー画面では `notInSession` になるのが正しい。
 
 ### UI の確認はヘッドレス Chrome で描画する
 
@@ -65,9 +65,11 @@ CSS を推測で直さず、描画して確認する。
 - 画像はブラウザ側（canvas）で 256×256 PNG にしてからアップロードし、サーバーは既に 256×256 PNG ならそのまま保存する。GDI+ の再エンコードは非決定的で、描き直すとエクスポート→インポートでハッシュが変わるため。
 - Git Bash 経由の `perl -e` / `node -e` / ヒアドキュメントでは `\\` が `\` に潰れる。バックスラッシュを含むスクリプトはファイルに書いてから実行する。
 - `language: auto` の文言は OS の UI カルチャで決まるので、日本語メッセージをアサートするテストは英語の CI ランナー（GitHub Actions の windows-latest）で落ちる。`tests/FxDeck.Tests/TestCulture.cs` の `[ModuleInitializer]` でテストプロセスを ja-JP に固定している。他のカルチャを試すテストは自分で `CultureInfo.CurrentUICulture` を切り替える。
+- コマンド一覧の取得（DesignNote §3.10）: `cmdlist` は production モードのクライアントで無効（開発者モード＝`+set moo 31337` が要る）。F8 コンソールの TAB 補完「Possible matches」は ImGui の `AddLog` 直書きで**コンソールソケット（29200）には流れてこない**ので `FxConsoleClient` からは拾えない（実機で確認済み）。外部プロセスから取れる唯一の経路は NUI（CEF）の 13172＋CDP で、chat（Vue 3、system resource）の `backingSuggestions` を読む。Vue のルートは本番ビルドだと `__vueParentComponent` が付かないので、`el.__vue_app__._container._vnode.component` から `subTree.component` を辿って `backingSuggestions` を持つインスタンスを探すこと。chat の実装は citizenfx/fivem の [`ext/system-resources/resources/chat`](https://github.com/citizenfx/fivem/tree/master/ext/system-resources/resources/chat)（[`html/App.ts`](https://github.com/citizenfx/fivem/blob/master/ext/system-resources/resources/chat/html/App.ts) の `backingSuggestions` / `suggestions`、[`cl_chat.lua`](https://github.com/citizenfx/fivem/blob/master/ext/system-resources/resources/chat/cl_chat.lua) の `refreshCommands` = `GetRegisteredCommands()` + `IsAceAllowed`）を参照。
 
 ## 6. 既知の課題・今後の候補
 
 - 英語文言のネイティブ確認。
 - トンネル: アプリがクラッシュした場合に cloudflared が残る可能性（Job Object 未使用）。固定 URL の転送先が違うときに UI で気付ける導線がない（Cloudflare の 502 になるだけ。設定画面の注意書きのみ）。
 - 将来機能（UIUX 参照）: フォルダキー、プロファイル切替キー、デッキからの自由入力コマンド。
+- NUI コマンド抽出の `server` ラベル（DesignNote §3.10）: 接続先サーバー名を安く取れる経路が見つかっていないため常に null。キャッシュの陳腐化表示は取得時刻のみ。

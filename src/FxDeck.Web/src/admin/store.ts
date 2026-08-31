@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AppConfig, DeckKey, DeckProfile } from "../shared/types";
+import type { AppConfig, CommandCache, DeckKey, DeckProfile } from "../shared/types";
 import { api, ApiError, type AdminStatus } from "./api";
 
 export type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
@@ -35,6 +35,8 @@ export interface AdminState {
   restartRequired: boolean;
   selectedProfileId: string | null;
   selectedCell: { row: number; col: number } | null;
+  /** Extracted command cache for the input assist (design memo §3.10); null until loaded. */
+  commandCache: CommandCache | null;
 
   load(): Promise<void>;
   refreshStatus(): Promise<void>;
@@ -43,6 +45,9 @@ export interface AdminState {
   flush(): Promise<void>;
   selectProfile(id: string | null): void;
   selectCell(cell: { row: number; col: number } | null): void;
+  /** Runs an extraction and stores the result; throws the localized ApiError when it fails. */
+  extractCommands(): Promise<CommandCache>;
+  clearCommands(): Promise<void>;
 }
 
 let saveTimer: number | null = null;
@@ -57,8 +62,14 @@ export const useAdminStore = create<AdminState>((set, get) => ({
   restartRequired: false,
   selectedProfileId: null,
   selectedCell: null,
+  commandCache: null,
 
   async load() {
+    // Non-fatal side load: the input assist works without it, so its failure must not block the app.
+    api
+      .commands()
+      .then((cache) => set({ commandCache: cache }))
+      .catch(() => undefined);
     try {
       const [config, status] = await Promise.all([api.config(), api.status()]);
       const sorted = { ...config, profiles: [...config.profiles].sort((a, b) => a.order - b.order) };
@@ -126,6 +137,17 @@ export const useAdminStore = create<AdminState>((set, get) => ({
 
   selectCell(cell) {
     set({ selectedCell: cell });
+  },
+
+  async extractCommands() {
+    const cache = await api.extractCommands();
+    set({ commandCache: cache });
+    return cache;
+  },
+
+  async clearCommands() {
+    await api.clearCommands();
+    set({ commandCache: { commands: [] } });
   },
 }));
 

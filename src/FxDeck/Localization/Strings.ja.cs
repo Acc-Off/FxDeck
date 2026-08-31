@@ -67,6 +67,9 @@ public static partial class Strings
         ["api.portInvalid"] = "ポートが不正です。",
         ["api.gameTestOk"] = "{0}:{1} に接続できました。",
         ["api.gameTestFailed"] = "{0}:{1} に接続できませんでした。FiveM が起動しているか確認してください。",
+        ["api.commands.gameNotRunning"] = "FiveM が見つかりません。",
+        ["api.commands.notInSession"] = "サーバーに接続してから実行してください。",
+        ["api.commands.chatUnavailable"] = "このサーバーのチャットからは取得できませんでした。",
 
         // --- tunnel (TunnelService) ---
         ["tunnel.tokenMissing"] = "固定 URL のトンネルトークンが設定されていません。「設定 → トンネル」で入力してください。",

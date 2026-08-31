@@ -1,4 +1,4 @@
-import type { AppConfig, GameState } from "../shared/types";
+import type { AppConfig, CommandCache, GameState } from "../shared/types";
 
 export interface AdminStatus {
   game: GameState;
@@ -73,6 +73,8 @@ export class ApiError extends Error {
     public status: number,
     message: string,
     public errors: string[] = [],
+    /** Machine-readable reason (e.g. the extraction's gameNotRunning / notInSession / chatUnavailable). */
+    public code?: string,
   ) {
     super(message);
   }
@@ -83,17 +85,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     let message = `${response.status} ${response.statusText}`;
     let errors: string[] = [];
+    let code: string | undefined;
     try {
-      const body = (await response.json()) as { error?: string; errors?: string[] };
+      const body = (await response.json()) as { error?: string; errors?: string[]; code?: string };
       if (body.error) message = body.error;
       if (body.errors) {
         errors = body.errors;
         if (!body.error) message = body.errors.join("\n");
       }
+      code = body.code;
     } catch {
       /* not json */
     }
-    throw new ApiError(response.status, message, errors);
+    throw new ApiError(response.status, message, errors, code);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -134,5 +138,8 @@ export const api = {
   about: () => request<AboutInfo>("/api/admin/about"),
   tunnelStart: () => request<{ tunnel: TunnelStatus }>("/api/admin/tunnel/start", { method: "POST" }),
   tunnelStop: () => request<{ tunnel: TunnelStatus }>("/api/admin/tunnel/stop", { method: "POST" }),
+  commands: () => request<CommandCache>("/api/admin/commands"),
+  extractCommands: () => request<CommandCache>("/api/admin/commands/extract", { method: "POST" }),
+  clearCommands: () => request<{ ok: boolean }>("/api/admin/commands", { method: "DELETE" }),
   qrUrl: (cacheBust: number, kind: "lan" | "tunnel" = "lan") => `/api/admin/qr?kind=${kind}&v=${cacheBust}`,
 };

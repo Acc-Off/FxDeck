@@ -93,6 +93,28 @@ export interface AppConfig {
   profiles: DeckProfile[];
 }
 
+/** One command extracted from the chat NUI (design memo §3.10); `name` carries no leading slash. */
+export interface CachedCommand {
+  name: string;
+  help?: string;
+  params?: CachedCommandParam[];
+}
+
+export interface CachedCommandParam {
+  name: string;
+  help?: string;
+  type?: string;
+  optional?: boolean;
+}
+
+/** `commands-cache.json` / `GET /api/admin/commands`. `extractedAt` is absent until something was extracted. */
+export interface CommandCache {
+  extractedAt?: string;
+  server?: string | null;
+  count?: number;
+  commands: CachedCommand[];
+}
+
 export interface HelloMessage {
   type: "hello";
   profiles: DeckProfile[];

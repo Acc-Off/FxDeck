@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useT } from "../shared/i18n";
 import { api, type Adapters } from "./api";
+import { formatExtractedAt } from "./commandAssist";
 import { useAdminStore } from "./store";
 
 /** One long page grouped like UIUX §5.5. */
@@ -11,10 +12,15 @@ export function SettingsPage() {
   const update = useAdminStore((s) => s.update);
   const load = useAdminStore((s) => s.load);
   const restartRequired = useAdminStore((s) => s.restartRequired);
+  const commandCache = useAdminStore((s) => s.commandCache);
+  const extractCommands = useAdminStore((s) => s.extractCommands);
+  const clearCommands = useAdminStore((s) => s.clearCommands);
   const [adapters, setAdapters] = useState<Adapters | null>(null);
   const [gameTest, setGameTest] = useState<string | null>(null);
   const [autoStart, setAutoStart] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
   const importAll = useRef<HTMLInputElement>(null);
   const importProfile = useRef<HTMLInputElement>(null);
 
@@ -81,6 +87,27 @@ export function SettingsPage() {
     if (!confirm(t("settings.restartConfirm"))) return;
     await api.restart();
     setMessage(t("settings.restarting"));
+  };
+
+  const extract = async () => {
+    setExtracting(true);
+    setExtractError(null);
+    try {
+      await extractCommands();
+    } catch (error) {
+      setExtractError(errorMessage(error));
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const clearExtracted = async () => {
+    setExtractError(null);
+    try {
+      await clearCommands();
+    } catch (error) {
+      setExtractError(errorMessage(error));
+    }
   };
 
   const gameState = status?.game === "connected" ? t("settings.game.state.connected") : status?.game === "connecting" ? t("settings.game.state.connecting") : t("settings.game.state.disconnected");
@@ -217,6 +244,25 @@ export function SettingsPage() {
             {t("settings.app.statusBar")}
           </label>
         </div>
+      </section>
+
+      <section>
+        <h3>{t("settings.assist.title")}</h3>
+        <div className="row">
+          <button type="button" onClick={() => void extract()} disabled={extracting}>
+            {extracting ? t("assist.extracting") : t("settings.assist.extract")}
+          </button>
+          <button type="button" onClick={() => void clearExtracted()} disabled={!commandCache?.extractedAt}>
+            {t("settings.assist.clear")}
+          </button>
+          <span className={extractError ? "error small" : "muted small"}>
+            {extractError ??
+              (commandCache?.extractedAt
+                ? t("assist.status", { count: commandCache.count ?? commandCache.commands.length, time: formatExtractedAt(commandCache.extractedAt) })
+                : t("settings.assist.none"))}
+          </span>
+        </div>
+        <p className="muted small">{t("settings.assist.hint")}</p>
       </section>
 
       <section>

@@ -67,6 +67,9 @@ public static partial class Strings
         ["api.portInvalid"] = "Invalid port.",
         ["api.gameTestOk"] = "Connected to {0}:{1}.",
         ["api.gameTestFailed"] = "Could not connect to {0}:{1}. Check that FiveM is running.",
+        ["api.commands.gameNotRunning"] = "FiveM was not found.",
+        ["api.commands.notInSession"] = "Join a server first, then try again.",
+        ["api.commands.chatUnavailable"] = "Could not read the commands from this server's chat.",
 
         // --- tunnel (TunnelService) ---
         ["tunnel.tokenMissing"] = "No tunnel token is set for the fixed URL. Enter it under Settings → Tunnel.",

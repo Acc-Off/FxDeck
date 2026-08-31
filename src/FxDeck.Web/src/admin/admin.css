@@ -771,3 +771,138 @@ input[type="color"] {
   object-fit: cover;
   display: block;
 }
+
+/* command input assist: typeahead + picker button (UIUX §5.3) */
+.command-field .field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.command-field .field-head button {
+  font-size: 12px;
+  padding: 2px 8px;
+  color: var(--admin-muted);
+}
+
+.command-input {
+  position: relative;
+}
+
+.typeahead {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  margin: 2px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.typeahead li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.typeahead li.active {
+  background: var(--admin-accent);
+  color: #fff;
+}
+
+.typeahead .name,
+.command-row .name {
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.typeahead .help,
+.command-row .help {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--admin-muted);
+}
+
+.typeahead li.active .help,
+.typeahead li.active .name,
+.typeahead li.active .usage {
+  color: #fff;
+}
+
+.typeahead .usage,
+.command-row .usage {
+  background: none;
+  padding: 0;
+  color: var(--admin-muted);
+  white-space: nowrap;
+}
+
+/* command picker modal (UIUX §5.6) */
+.command-picker .cache-status {
+  align-self: center;
+  white-space: nowrap;
+}
+
+.command-picker .modal-header button {
+  white-space: nowrap;
+}
+
+.command-picker .aux-toggle {
+  padding: 8px 12px 0;
+}
+
+.command-picker .picker-error {
+  margin: 8px 12px 0;
+}
+
+.command-results {
+  overflow-y: auto;
+  padding: 8px;
+  flex: 1;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+}
+
+.command-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.command-row:hover:not(:disabled) {
+  background: rgba(128, 128, 128, 0.18);
+}
+
+.picker-empty {
+  margin: auto;
+  text-align: center;
+}
+
+.picker-note {
+  text-align: center;
+  padding: 6px 0;
+}

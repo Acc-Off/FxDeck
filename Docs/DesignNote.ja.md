@@ -176,6 +176,9 @@ GET  /api/admin/about             バージョン、ライセンス、THIRD-PART
 POST /api/admin/restart           アプリを再起動（ポート変更の反映用。トレイ側が停止→同じ引数で再起動）
 POST /api/admin/tunnel/start      トンネルを開始（設定の mode が off なら TryCloudflare）。準備が整うか失敗するまで待って {tunnel} を返す。失敗は 502 で {tunnel.error} に理由
 POST /api/admin/tunnel/stop       トンネルを停止（cloudflared を kill）
+POST /api/admin/commands/extract  NUI（13172）から接続中サーバーのコマンドを抽出しキャッシュ更新 → {extractedAt,count,server,commands}。取得不可は 409 で {error} に理由コード（gameNotRunning / notInSession / chatUnavailable。§3.10）
+GET  /api/admin/commands          コマンドキャッシュを返す（無ければ {commands:[]}）。編集画面が起動時に読む
+DELETE /api/admin/commands        コマンドキャッシュを削除
 ```
 
 - `/api/admin/status` の `tunnel` は `{ mode, autoStart, status: "stopped"|"starting"|"running"|"error", url, deckUrl, error: { phase: "download"|"start"|"exited", message } | null }`。`url` は公開 URL（TryCloudflare は cloudflared の出力から取得、固定 URL は設定の `namedUrl`）、`deckUrl` はそれにトークンを付けた QR の中身。管理 UI は 2 秒ごとの status ポーリングで追従する。
@@ -308,6 +311,57 @@ game-icons.net は絵柄が好みでないため不採用。
 - **変えないもの**: ドキュメント・コミットメッセージは日本語、コードの識別子・コメントは英語、ログは英語（開発者向け）。
 - 文言の正は日本語。英語は日本語から起こし、キーが増えたら両方を同時に更新する（片方に無いキーはビルド時の型チェックで検出）。
 
+### 3.10 NUI コマンド抽出（入力補助用）
+
+管理画面のボタン編集で「接続中サーバーで使えるコマンド」を入力補助として出すための仕組み。**利用者が明示操作したときだけ**取りに行き、単一キャッシュに残す。**コンソールソケット（§3.1）とは別系統**で、こちらは FiveM クライアントの NUI（CEF）を読む。
+
+取得元と前提:
+
+| 項目 | 内容 |
+|---|---|
+| ポート | FiveM クライアントの CEF リモートデバッグ `127.0.0.1:13172`。ゲーム起動中は**開発者モード不要で常時開いている**（`nui_devtools` コマンドは開発者モード必須だがポート自体は無関係）。ループバックなので FxDeck から到達できる |
+| プロトコル | CDP（Chrome DevTools Protocol）over WebSocket |
+| 取得元の状態 | chat リソースの NUI。chat は現在 FiveM サーバーアーティファクト同梱の **system resource**（Vue 3、`nui://chat/dist/ui.html`）で、cfx-server-data からは撤去済み。大半のサーバーでこの公式 chat が動く |
+
+仕組み（**Tier 1・受動読み取りのみ**）:
+
+1. `GET http://127.0.0.1:13172/json` でページ一覧を取る。ゲーム内では `CitizenFX root UI`（`nui://game/ui/root.html`）1 枚が各リソース NUI を子 iframe として抱える。メニュー画面では chat フレームが存在しない。
+2. そのページに CDP 接続し、`Runtime.enable`（各フレームの実行コンテキストを拾う）+ `Page.getFrameTree` で `name === "chat"`（または url が `nui://chat/` / `cfx-nui-chat/`）のフレームを探す。
+3. chat フレームの **main-world 実行コンテキスト**で `Runtime.evaluate` し、公式 chat（Vue 3）の状態 `backingSuggestions − removedSuggestions`（= computed `suggestions`）を読む。各要素は `{ name: "/x", help, params: [{ name, help, type?, optional? }] }`。サーバーの `chat:addSuggestions`（クライアント側 `refreshCommands()` が `GetRegisteredCommands()` を `IsAceAllowed("command.<name>")` でフィルタ）由来なので、**権限のあるコマンドだけ**が並ぶ。
+4. **ゲーム／サーバーへは一切送らない**。既に NUI が持っているメモリを読むだけ。
+
+封じ込め: `FxConsoleClient` と同じく非公式仕様なので、CDP と chat 内部構造への依存を新名前空間 `src/FxDeck/NuiInspect/`（最小 CDP クライアント `CdpClient` + `ChatCommandExtractor`）に閉じ込める。Vue のルートは決め打ちせず（本番ビルドでは `__vueParentComponent` は付かない）、コンポーネント木を辿って `backingSuggestions` を持つインスタンスを探す。undocumented なので変更に備えて防御的に実装し、失敗はログに残す。
+
+**Tier 2 は採らない**: `http://chat/loaded` を叩いてクライアント／サーバーに再列挙させる能動手段（`GetRegisteredCommands` + `chat:init` でより網羅的）は、ゲームに干渉し `chat:init` の副作用（サーバーが MOTD を再送しうる）もあるため**製品には入れない**。調査用スクリプトにのみ残す。「コマンドを送るツール」であっても、抽出は受動に留める。
+
+限界（UI に正直に出す）:
+
+- **in-game 時のみ**。メニュー中は chat フレームが無く取得できない。
+- chat を独自リソースに差し替えたサーバーでは `backingSuggestions` を読めず**取得不可**（Tier 2 に落とさず、取得不可と表示する）。
+- サーバーが push した純チャットサジェスト（`RegisterCommand` を伴わないもの）はコンソールで実行できない可能性がある。補助は「候補」であって保証ではない。手動入力は常に許す。
+- `+x` / `-x` のキーバインド半片、`txAdmin:menu:*`、convar 的なエントリも含まれる。**保存は全件**、ボタン用途に不向きなものは表示側で既定非表示にする（[UIUX.ja.md](./UIUX.ja.md) §5.6）。
+
+正規化と保存:
+
+- 保存時に**先頭 `/` を除去**して `name` をコンソール送信名に合わせる（chat は `/jail`、コンソールソケットに送るのは `jail`）。表示で必要なら `/` を戻す。
+- name の重複は排除し、`help` / `params` を持つ方を優先する。
+- **単一キャッシュ** 1 ファイル `%LOCALAPPDATA%\FxDeck\commands-cache.json`。`config.json` とは分離し、**ホットリロード対象にしない・エクスポートに含めない**。抽出のたびに丸ごと上書きする。
+
+```jsonc
+// %LOCALAPPDATA%\FxDeck\commands-cache.json
+{
+  "extractedAt": "2026-08-31T12:34:56+09:00",  // 陳腐化の目安に表示する
+  "server": null,                              // 表示用ラベル。取れれば入れる（best-effort、null 可）
+  "count": 520,
+  "commands": [
+    { "name": "jail", "help": "プレイヤーを収監（警察専用）", "params": [ { "name": "id", "help": "プレイヤーの ID", "optional": false } ] }
+  ]
+}
+```
+
+- キャッシュは RAM に載せて補助に使い、ディスクにも残して再起動後も使う。派生データなので config のバリデーションやバージョン管理とは無関係に扱う。
+- 検出方針: ボタン活性化のために 13172 を**常時ポーリングしない**（受動性を保つ）。抽出は利用者がボタンを押したときに一度だけ試行し、結果で状態を表示する（未起動／セッション外／独自 chat／成功）。
+
 ## 4. データモデル（案）
 
 ```jsonc
@@ -375,6 +429,7 @@ UI 上の理由（[UIUX.ja.md](./UIUX.ja.md) §0, §4, §8）: Stream Deck Mobil
 - `config.json` はファイル監視してホットリロードする（手で編集しても即デッキに反映。管理 UI ができるまでの編集手段であり、以降も残す）。壊れた JSON は無視して直前の設定を保ち、ログに警告を出す。
 - 環境変数 `FXDECK_DATA_DIR` でデータディレクトリを差し替えられる（テストと複数インスタンス検証用）。
 - インポート／エクスポートは `profiles` 単位と全体の 2 種類。形式は §3.8 参照（zip 基本、JSON も可）。
+- コマンド抽出のキャッシュ `commands-cache.json`（§3.10）は `config.json` とは別ファイルで、ホットリロード・検証・エクスポートの対象外。派生キャッシュとして独立に扱う。
 
 ## 5. 配布・ビルド
 
@@ -428,6 +483,8 @@ UI 上の理由（[UIUX.ja.md](./UIUX.ja.md) §0, §4, §8）: Stream Deck Mobil
 | トークン漏洩（URL 共有、スクショ） | 第三者がゲームにコマンド送信 | URL からの即時除去、再発行、レート制限、管理 UI の localhost 限定 |
 | TryCloudflare の URL が毎回変わる | 別ネットワーク利用時に毎回 QR を読み直す手間 | 起動時に QR 自動更新、固定 URL はオプションで |
 | 単一 exe のサイズ | 配布の重さ | 許容。将来的にフレームワーク依存版も並行配布可 |
+| NUI（13172）の chat 内部構造・CDP が FiveM／chat 更新で変わる | **入力補助のみ**停止（機能本体は無影響） | `NuiInspect` に隔離、Vue ルートを決め打ちせず探索、取得不可を graceful に表示（§3.10）。手動入力は常に可能 |
+| 13172 への自己接続がアンチチートに検知される可能性 | 稀だが誤検知の懸念 | 受動読み取り（Tier 1）に限定し常時ポーリングしない。README にその旨を明記 |
 
 ## 8. 決定事項・未決事項
 
@@ -440,6 +497,7 @@ UI 上の理由（[UIUX.ja.md](./UIUX.ja.md) §0, §4, §8）: Stream Deck Mobil
 - アイコン: MDI + Font Awesome Free をアイコンフォント形式で同梱、Unicode 絵文字は端末フォントで描画。ユーザー画像は PNG / JPEG / WebP / GIF（SVG は初期非対応）。エクスポートはプロファイル単位／全体を選んで zip（`.fxdeck`）
 - ライセンス表記: `THIRD-PARTY-NOTICES.md` + 管理 UI の About 画面で一元表示（CC BY の帰属表示もここで満たす）
 - 押す／離す・ステージ（§3.2）: fxcommands の On Press / On Release と Staged buttons に合わせる。fxcommands と意図的に変える点は (1) ステージはサーバー側で持ち全端末で共有、永続化しない (2) 失敗したらステージを進めない (3) WebSocket 切断時に押しっぱなしのキーの `releaseCommand` を送る、の 3 つ
+- NUI コマンド抽出（§3.10）: NUI（13172）の**受動読み取り（Tier 1）のみ**、管理画面の**明示操作**でのみ実行、**単一キャッシュ**（`commands-cache.json`）。ゲームに干渉する Tier 2（loaded トリガ再列挙）は製品に入れない。入力補助はボタン編集のタイプアヘッド＋コマンドピッカー（UIUX §5.3 / §5.6）
 
 未決:
 
